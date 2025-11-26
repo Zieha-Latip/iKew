@@ -1,0 +1,1725 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Kunci Masuk Data Rekod</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .tab-button.active { background-color: #10b981; color: white; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5), 0 2px 4px -1px rgba(16, 185, 129, 0.06); }
+        input[type="number"]::-webkit-inner-spin-button, 
+        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"] { -moz-appearance: textfield; }
+        /* Style untuk butang remove baris */
+        .remove-btn { line-height: 1; padding: 0.5rem 0.75rem; }
+        /* Style untuk input di dalam jadual */
+        .table-input { padding: 0.5rem; } 
+        /* Modal backdrop fix */
+        .modal-active { display: flex; }
+        /* Sticky header for report table */
+        .report-table thead th { position: sticky; top: 0; background-color: #f9fafb; z-index: 10; }
+    </style>
+</head>
+<body>
+
+<div id="app" class="min-h-screen p-4 md:p-8">
+    <!-- Header dan Status Pengguna -->
+    <div class="max-w-4xl mx-auto mb-8 bg-white p-6 rounded-xl shadow-lg">
+        <h1 class="text-3xl font-bold text-gray-800 mb-2">Sistem Rekod Kunci Masuk Data</h1>
+        <p class="text-gray-600 mb-4">Sila pilih jenis rekod untuk memulakan kunci masuk data mengikut struktur fail CSV.</p>
+        <div id="auth-status" class="text-sm font-medium text-blue-600">
+            Memuatkan pengesahan pengguna...
+        </div>
+        <div class="mt-2 text-xs text-gray-500">
+            ID Pengguna (untuk rujukan): <span id="user-id">N/A</span>
+        </div>
+    </div>
+
+    <!-- Pilihan Jenis Borang / Tab -->
+    <div class="max-w-4xl mx-auto mb-6">
+        <div class="flex flex-wrap gap-3 p-2 bg-gray-100 rounded-xl shadow-inner">
+            <button class="tab-button active flex-1 p-3 text-sm font-semibold rounded-lg transition duration-200" data-form="peruntukan" data-tab-type="entry">
+                1. REKOD PERUNTUKAN
+            </button>
+            <button class="tab-button flex-1 p-3 text-sm font-semibold rounded-lg text-gray-700 hover:bg-white transition duration-200" data-form="ppt" data-tab-type="entry">
+                2. REKOD PPT
+            </button>
+            <button class="tab-button flex-1 p-3 text-sm font-semibold rounded-lg text-gray-700 hover:bg-white transition duration-200" data-form="transaksi" data-tab-type="entry">
+                3. REKOD TRANSAKSI
+            </button>
+            <button class="tab-button flex-1 p-3 text-sm font-semibold rounded-lg text-gray-700 hover:bg-white transition duration-200" data-form="laporan" data-tab-type="report">
+                4. LAPORAN
+            </button>
+        </div>
+    </div>
+
+    <!-- Kandungan Tab Kunci Masuk / Laporan -->
+    <div id="content-container" class="max-w-4xl mx-auto bg-white p-6 rounded-xl shadow-lg">
+        <!-- Borang atau Laporan akan dimuatkan di sini -->
+        <div id="form-container"></div>
+        <div id="report-container" class="hidden">
+            <!-- UI laporan akan diletakkan di sini -->
+        </div>
+    </div>
+
+    <!-- Paparan Data Kunci Masuk (Hanya untuk tab entry) -->
+    <div id="recent-data-section" class="max-w-4xl mx-auto mt-8 bg-white p-6 rounded-xl shadow-lg">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">Data Kunci Masuk (<span id="current-collection-title">PERUNTUKAN</span>)</h2>
+        <div id="recent-data" class="overflow-x-auto">
+            <!-- Data dari Firestore akan dipaparkan di sini -->
+            <p class="text-gray-500 italic" id="loading-data-message">Memuatkan data terkini...</p>
+        </div>
+    </div>
+
+</div>
+
+<!-- MODAL PINDAAN PPT -->
+<div id="pindaanModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6">
+        <div class="flex justify-between items-center border-b pb-3 mb-4">
+            <h3 class="text-xl font-bold text-gray-800">Butiran Pindaan</h3>
+            <button type="button" id="closeModalBtn" class="text-gray-400 hover:text-gray-600 transition duration-150">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <p class="text-gray-600 text-sm mt-1 mb-4">Rekod PPT: <span id="modal-kod-ppt" class="font-semibold text-indigo-700"></span></p>
+
+        <form id="pindaan-form" data-doc-id="">
+            <div class="space-y-4">
+                <div>
+                    <label for="pindaan_rujukan" class="block text-sm font-medium text-gray-700">No Rujukan PPT Pindaan <span class="text-red-500">*</span></label>
+                    <input type="text" id="pindaan_rujukan" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg" placeholder="Masukkan No Rujukan" required>
+                </div>
+                <div>
+                    <label for="pindaan_tarikh" class="block text-sm font-medium text-gray-700">Tarikh Pindaan <span class="text-red-500">*</span></label>
+                    <input type="date" id="pindaan_tarikh" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg" required>
+                </div>
+                <div>
+                    <label for="pindaan_amaun" class="block text-sm font-medium text-gray-700">PPT Pinda (+/-) (RM) <span class="text-red-500">*</span></label>
+                    <input type="number" id="pindaan_amaun" step="0.01" class="mt-1 block w-full p-2 border border-gray-300 rounded-lg" placeholder="Cth: 500.00 atau -100.00" required>
+                </div>
+            </div>
+
+            <button type="submit" class="mt-6 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-lg transition duration-150">
+                Simpan Pindaan Baharu
+            </button>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL BUTIRAN (PERUNTUKAN/TRANSAKSI) -->
+<div id="butiranModal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center border-b pb-3 mb-4">
+            <h3 class="text-xl font-bold text-gray-800" id="butiran-modal-title">Butiran Rekod</h3>
+            <button type="button" id="closeButiranModalBtn" class="text-gray-400 hover:text-gray-600 transition duration-150">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <div id="butiran-modal-content">
+            <!-- Kandungan butiran akan dimuatkan di sini -->
+        </div>
+
+        <button type="button" id="deleteRecordFromModalBtn" class="mt-6 w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2.5 rounded-lg transition duration-150">
+            Hapus Rekod Keseluruhan
+        </button>
+    </div>
+</div>
+
+
+<!-- Firebase SDKs -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, setLogLevel, serverTimestamp, where, getDocs, updateDoc, doc, arrayUnion, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Tetapan Wajib dari Persekitaran Canvas
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    // Inisialisasi Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    // setLogLevel('debug'); // Aktifkan log untuk debugging
+
+    let currentUserId = null;
+    let currentCollection = 'peruntukan_records'; // Nilai lalai
+
+    // --- UTILITIES FIREBASE ---
+
+    /**
+     * Menyediakan pengesahan pengguna.
+     */
+    async function setupAuth() {
+        const statusElement = document.getElementById('auth-status');
+        try {
+            if (initialAuthToken) {
+                await signInWithCustomToken(auth, initialAuthToken);
+            } else {
+                await signInAnonymously(auth);
+            }
+        } catch (error) {
+            console.error("Ralat pengesahan Firebase:", error);
+            statusElement.textContent = `Ralat pengesahan: ${error.message}`;
+        }
+    }
+
+    /**
+     * Memperoleh laluan koleksi awam (public) berdasarkan ID Aplikasi.
+     * @param {string} collectionName - Nama koleksi (cth: 'peruntukan_records').
+     * @returns {string} Laluan Firestore penuh.
+     */
+    function getCollectionPath(collectionName) {
+        return `/artifacts/${appId}/public/data/${collectionName}`;
+    }
+
+    /**
+     * Menyimpan data borang ke Firestore.
+     * @param {object} data - Data borang yang akan disimpan.
+     * @param {string} collectionName - Nama koleksi.
+     */
+    async function saveData(data, collectionName) {
+        const path = getCollectionPath(collectionName);
+        try {
+            await addDoc(collection(db, path), {
+                ...data,
+                userId: currentUserId,
+                timestamp: serverTimestamp()
+            });
+            showMessage(`Data ${collectionName.split('_')[0].toUpperCase()} berjaya disimpan!`, 'success');
+        } catch (e) {
+            console.error("Ralat menambah dokumen:", e);
+            showMessage("Ralat semasa menyimpan data. Sila semak konsol.", 'error');
+        }
+    }
+
+    /**
+     * Memaparkan mesej sementara kepada pengguna (success/error).
+     * @param {string} message - Mesej untuk dipaparkan.
+     * @param {'success'|'error'} type - Jenis mesej.
+     */
+    function showMessage(message, type, targetContainer = 'form-container') {
+        const container = document.getElementById(targetContainer);
+        let msgBox = document.getElementById(`${targetContainer}-message`);
+        if (!msgBox) {
+            msgBox = document.createElement('div');
+            msgBox.id = `${targetContainer}-message`;
+            container.prepend(msgBox);
+        }
+
+        msgBox.className = `p-3 mb-4 rounded-lg font-medium ${type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
+        msgBox.textContent = message;
+
+        setTimeout(() => {
+            msgBox.remove();
+        }, 5000);
+    }
+    
+    /**
+     * Menghapuskan rekod dari Firestore selepas pengesahan pengguna.
+     * @param {string} docId - ID dokumen yang akan dihapus.
+     * @param {string} collectionName - Nama koleksi.
+     */
+    async function deleteRecord(docId, collectionName) {
+        if (!confirm('Adakah anda pasti mahu menghapus rekod ini secara kekal? Tindakan ini tidak boleh dibatalkan.')) {
+            return;
+        }
+
+        const path = getCollectionPath(collectionName);
+        const docRef = doc(db, path, docId);
+        
+        try {
+            await deleteDoc(docRef);
+            showMessage(`Rekod ${collectionName.split('_')[0].toUpperCase()} berjaya dihapus.`, 'success', 'recent-data-section');
+        } catch (e) {
+            console.error("Ralat menghapus dokumen:", e);
+            showMessage("Ralat semasa menghapus rekod. Sila semak konsol.", 'error', 'recent-data-section');
+        }
+    }
+
+
+    // --- STRUKTUR BORANG ---
+
+    const formDefinitions = {
+        peruntukan: {
+            title: "Borang Kunci Masuk: REKOD PERUNTUKAN",
+            collection: "peruntukan_records",
+            // Header Fields (Single entry per form)
+            fields: [
+                { name: "no_waran", label: "No Waran", type: "text", required: true },
+                { name: "tarikh_waran", label: "Tarikh Waran", type: "date", required: true },
+                { name: "kod_ptj", label: "Kod PTJ", type: "text", required: true },
+            ],
+            // Line Item Fields (Table entry - multiple rows)
+            line_item_fields: [
+                { name: "kod_aktiviti", label: "Kod Aktiviti", type: "text", required: true, placeholder: "Aktiviti" },
+                { name: "kod_sebagai", label: "Kod Sebagai", type: "number", required: true, placeholder: "Cth: 21000" },
+                { name: "peruntukan_tambah", label: "Tambah (+)", type: "number", step: "0.01", required: false, defaultValue: 0, placeholder: "0.00" },
+                { name: "peruntukan_tarik", label: "Tarik (-)", type: "number", step: "0.01", required: false, defaultValue: 0, placeholder: "0.00" },
+            ]
+        },
+        transaksi: {
+            title: "Borang Kunci Masuk: REKOD TRANSAKSI / PERBELANJAAN",
+            collection: "transaksi_records",
+            fields: [
+                // Header Fields
+                { name: "bil", label: "Bil. Urutan", type: "number", required: true },
+                { name: "perihal_pembayaran", label: "Perihal Pembayaran", type: "textarea", required: true, description: "Boleh beberapa dalam 1 dokumen" },
+                { name: "penerima_bayaran", label: "Penerima Bayaran", type: "text", required: false, description: "Tidak wajib dan boleh dipinda kemudian" }, 
+                { name: "kod_ptj", label: "Kod PTJ", type: "text", required: true },
+                { 
+                    name: "modul_lo", label: "Modul/LO", type: "select", required: true, 
+                    options: [
+                        { value: "", text: "Pilih Modul/LO" }, 
+                        { value: "EP", text: "1. EP" }, 
+                        { value: "PWR", text: "2. PWR" }, 
+                        { value: "TNT", text: "3. TNT" }, 
+                        { value: "OT", text: "4. OT" }, 
+                        { value: "TANPA PT", text: "5. Tanpa PT" }, 
+                        { value: "INDEN", text: "6. Inden" }, 
+                        { value: "LO iGFMAS", text: "7. LO iGFMAS" }
+                    ]
+                },
+                { name: "no_dokumen", label: "No Dokumen", type: "text", required: false, description: "Tidak wajib dan boleh dipinda kemudian" },
+                { name: "tarikh_dokumen", label: "Tarikh Dokumen", type: "date", required: false, description: "Tidak wajib dan boleh dipinda kemudian" },
+            ],
+            // Line Item Fields (Table entry - multiple rows)
+            line_item_fields: [
+                { name: "kod_aktiviti", label: "Kod Aktiviti", type: "text", required: true, placeholder: "Aktiviti" },
+                { name: "kod_sebagai", label: "Kod Sebagai", type: "number", required: true, placeholder: "Cth: 21000" },
+                { name: "kod_akaun", label: "Kod Akaun", type: "text", required: true, placeholder: "Cth: B0221101", pattern: "^[A-Za-z]\\d{7}$", description: "Format: 1 Huruf + 7 Nombor" }, // Disesuaikan untuk format B0221101
+                { name: "kod_ppt", label: "KOD PPT", type: "text", required: true, placeholder: "KOD PPT" }, 
+                { name: "amaun_perbelanjaan", label: "Amaun (RM)", type: "number", step: "0.01", required: true, placeholder: "0.00" },
+            ]
+        },
+        ppt: {
+            title: "Borang Kunci Masuk: REKOD PPT",
+            collection: "ppt_records",
+            fields: [
+                { name: "kod_ppt", label: "Kod PPT", type: "text", required: true },
+                { name: "perihal_ppt", label: "Perihal PPT", type: "textarea", required: true },
+                { name: "ppt_asal", label: "PPT Asal (RM)", type: "number", step: "0.01", required: true },
+            ],
+            // Line Item Fields DIBUANG DARI BORANG PENCIPTAAN REKOD BARU
+        }
+    };
+
+    /**
+     * Menjana baris input untuk jadual Peruntukan
+     */
+    function createPeruntukanRow(fieldDefs) {
+        let rowHtml = fieldDefs.map(field => {
+            const requiredAttr = field.required ? 'required' : '';
+            const stepAttr = field.step ? `step="${field.step}"` : '';
+            const defaultValueAttr = field.defaultValue !== undefined ? `value="${field.defaultValue}"` : '';
+            
+            return `
+                <td class="p-1">
+                    <input type="${field.type}" name="${field.name}[]" ${stepAttr} ${defaultValueAttr}
+                           class="table-input w-full border border-gray-300 rounded-lg text-sm"
+                           placeholder="${field.placeholder}" ${requiredAttr}>
+                </td>
+            `;
+        }).join('');
+
+        // Tambah butang buang baris di hujung
+        rowHtml += `
+            <td class="p-1 w-10">
+                <button type="button" class="remove-btn bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-md transition duration-200" title="Buang baris">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </td>
+        `;
+
+        return `<tr class="peruntukan-row border-b border-gray-100">${rowHtml}</tr>`;
+    }
+
+    /**
+     * Menjana baris input untuk jadual Transaksi
+     */
+    function createTransaksiRow(fieldDefs) {
+        let rowHtml = fieldDefs.map(field => {
+            const requiredAttr = field.required ? 'required' : '';
+            const stepAttr = field.step ? `step="${field.step}"` : '';
+            const inputClass = field.name === 'amaun_perbelanjaan' ? 'amaun-input' : ''; // Tanda untuk pengiraan jumlah
+            const patternAttr = field.pattern ? `pattern="${field.pattern}"` : ''; // NEW: Add pattern
+            const titleAttr = field.description ? `title="${field.description}"` : ''; // NEW: Add title for browser tooltip
+            
+            return `
+                <td class="p-1">
+                    <input type="${field.type}" name="${field.name}[]" ${stepAttr} ${patternAttr} ${titleAttr}
+                           class="table-input w-full border border-gray-300 rounded-lg text-sm ${inputClass}"
+                           placeholder="${field.placeholder}" ${requiredAttr}>
+                </td>
+            `;
+        }).join('');
+
+        // Tambah butang buang baris di hujung
+        rowHtml += `
+            <td class="p-1 w-10">
+                <button type="button" class="remove-btn bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-md transition duration-200" title="Buang baris">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </td>
+        `;
+
+        return `<tr class="transaksi-row border-b border-gray-100">${rowHtml}</tr>`;
+    }
+
+    // Fungsi createPPTRow tidak diperlukan lagi untuk borang utama
+
+
+    /**
+     * Menjana HTML untuk input medan tunggal (header fields).
+     */
+    function generateFieldHtml(field) {
+        let inputHtml;
+        const baseClasses = "mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-green-500 focus:border-green-500 transition duration-150";
+
+        if (field.type === 'select') {
+            const optionsHtml = field.options.map(opt => 
+                `<option value="${opt.value}">${opt.text}</option>`
+            ).join('');
+            inputHtml = `<select id="${field.name}" name="${field.name}" class="${baseClasses}" ${field.required ? 'required' : ''}>${optionsHtml}</select>`;
+        } else if (field.type === 'textarea') {
+            inputHtml = `<textarea id="${field.name}" name="${field.name}" rows="3" class="${baseClasses}" ${field.required ? 'required' : ''} placeholder="Masukkan ${field.label.toLowerCase()}"></textarea>`;
+        } else {
+            const stepAttr = field.step ? `step="${field.step}"` : '';
+            const defaultValueAttr = field.defaultValue !== undefined ? `value="${field.defaultValue}"` : '';
+            inputHtml = `<input type="${field.type}" id="${field.name}" name="${field.name}" ${stepAttr} ${defaultValueAttr} class="${baseClasses}" ${field.required ? 'required' : ''} placeholder="Masukkan ${field.label.toLowerCase()}">`;
+        }
+
+        return `
+            <div class="col-span-1">
+                <label for="${field.name}" class="block text-sm font-medium text-gray-700 mb-1">
+                    ${field.label} ${field.required ? '<span class="text-red-500">*</span>' : ''}
+                </label>
+                ${inputHtml}
+                ${field.description ? `<p class="mt-1 text-xs text-gray-500 italic">${field.description}</p>` : ''}
+            </div>
+        `;
+    }
+
+    /**
+     * Menukar pandangan antara Borang Kunci Masuk dan Laporan.
+     * @param {'entry' | 'report'} tabType
+     * @param {string} formKey - Kunci borang (cth: 'peruntukan')
+     */
+    function switchView(tabType, formKey) {
+        const formContainer = document.getElementById('form-container');
+        const reportContainer = document.getElementById('report-container');
+        const recentDataSection = document.getElementById('recent-data-section');
+
+        if (tabType === 'entry') {
+            formContainer.classList.remove('hidden');
+            reportContainer.classList.add('hidden');
+            recentDataSection.classList.remove('hidden');
+            renderEntryForm(formKey);
+        } else if (tabType === 'report') {
+            formContainer.classList.add('hidden');
+            reportContainer.classList.remove('hidden');
+            recentDataSection.classList.add('hidden');
+            renderReportForm();
+        }
+    }
+
+
+    /**
+     * Menjana dan memaparkan borang kemasukan data.
+     */
+    function renderEntryForm(formKey) {
+        const formDef = formDefinitions[formKey];
+        if (!formDef) return;
+
+        currentCollection = formDef.collection;
+        document.getElementById('current-collection-title').textContent = formKey.toUpperCase();
+        
+        const headerFieldsHtml = formDef.fields.map(generateFieldHtml).join('');
+        let formContentHtml = '';
+
+        if (formKey === 'peruntukan') {
+            // Borang Peruntukan (Struktur Khas Jadual)
+            const lineItemHeaders = formDef.line_item_fields.map(f => f.label).join('</th><th class="p-2 text-sm font-medium text-gray-600 text-left">');
+            
+            formContentHtml = `
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        ${headerFieldsHtml}
+                    </div>
+                    
+                    <h3 class="text-lg font-semibold text-gray-700 pt-4 border-t mt-6">Butiran Peruntukan (Line Items) <span class="text-red-500">*</span></h3>
+                    <p class="text-sm text-gray-500 italic mb-2">Perhatian: Nilai mesti dimasukkan di 'Tambah (+)' ATAU 'Tarik (-)' (tidak boleh kedua-duanya sifar).</p>
+                    <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table id="peruntukan-table" class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="p-2 text-sm font-medium text-gray-600 text-left">${lineItemHeaders}</th>
+                                    <th class="p-2 w-10"></th> <!-- Untuk butang buang -->
+                                </tr>
+                            </thead>
+                            <tbody id="peruntukan-table-body">
+                                <!-- Baris awal -->
+                                ${createPeruntukanRow(formDef.line_item_fields)}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <button type="button" id="add-peruntukan-row-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        Tambah Baris Butiran
+                    </button>
+                </div>
+            `;
+        } else if (formKey === 'transaksi') {
+            // Borang Transaksi (Struktur Khas Jadual Butiran + Jumlah Kiraan)
+            const lineItemHeaders = formDef.line_item_fields.map(f => f.label).join('</th><th class="p-2 text-sm font-medium text-gray-600 text-left">');
+
+            formContentHtml = `
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        ${headerFieldsHtml}
+                    </div>
+                    
+                    <h3 class="text-lg font-semibold text-gray-700 pt-4 border-t mt-6">Butiran Perbelanjaan (Line Items)</h3>
+                    <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                        <table id="transaksi-table" class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="p-2 text-sm font-medium text-gray-600 text-left">${lineItemHeaders}</th>
+                                    <th class="p-2 w-10"></th> <!-- Untuk butang buang -->
+                                </tr>
+                            </thead>
+                            <tbody id="transaksi-table-body">
+                                <!-- Baris awal -->
+                                ${createTransaksiRow(formDef.line_item_fields)}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <button type="button" id="add-transaksi-row-btn" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                        Tambah Baris Butiran
+                    </button>
+
+                    <div class="text-right p-4 border-t border-gray-300 mt-4">
+                        <p class="text-xl font-bold text-gray-800">Jumlah Perbelanjaan (RM): <span id="total-expenditure-display" class="text-green-600">0.00</span></p>
+                    </div>
+                </div>
+            `;
+        } 
+        else if (formKey === 'ppt') {
+             // Borang PPT (Struktur Header SAHAJA)
+            formContentHtml = `
+                <div class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        ${headerFieldsHtml}
+                    </div>
+                    
+                    <div class="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                        <h3 class="text-lg font-semibold text-gray-700">Butiran Pindaan</h3>
+                        <p class="text-sm text-gray-600 italic">Butiran pindaan akan diuruskan melalui butang <span class="font-bold text-blue-600">Pinda</span> pada rekod yang telah disimpan di bawah.</p>
+                    </div>
+                </div>
+            `;
+            // Tiada listener jadual untuk PPT di sini
+        }
+        
+        const fullFormHtml = `
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6">${formDef.title}</h2>
+            <form id="data-entry-form" class="space-y-6">
+                ${formContentHtml}
+                <button type="submit" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg shadow-md transition duration-200 focus:outline-none focus:ring-4 focus:ring-green-300">
+                    <svg class="w-5 h-5 inline mr-2 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-3-3v6m5 4H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Simpan Rekod ${formKey.toUpperCase()}
+                </button>
+            </form>
+        `;
+
+        document.getElementById('form-container').innerHTML = fullFormHtml;
+        
+        // Pasang event listeners yang sesuai
+        document.getElementById('data-entry-form').addEventListener('submit', handleFormSubmit);
+        
+        if (formKey === 'peruntukan') {
+            attachTableListeners('peruntukan', formDef.line_item_fields, 'peruntukan-row', 'peruntukan-table-body', 'add-peruntukan-row-btn', createPeruntukanRow);
+        } else if (formKey === 'transaksi') {
+            attachTableListeners('transaksi', formDef.line_item_fields, 'transaksi-row', 'transaksi-table-body', 'add-transaksi-row-btn', createTransaksiRow);
+            // Tambah listener untuk pengiraan jumlah perbelanjaan
+            document.getElementById('transaksi-table-body').addEventListener('input', updateTransaksiTotal);
+            updateTransaksiTotal(); // Kira jumlah awal
+        } 
+        // Tiada attachTableListeners untuk PPT di sini
+
+        // Mula mendengar perubahan data bagi koleksi baru
+        listenForDataChanges(currentCollection);
+    }
+
+    // --- LOGIK REPORTING (TAB BARU) ---
+
+    const REPORT_GROUPS = {
+        'kod_aktiviti': 'Kod Aktiviti',
+        'kod_sebagai': 'Kod Sebagai',
+        'kod_ptj': 'Kod PTJ',
+        'kod_ppt': 'Kod PPT'
+    };
+
+    /**
+     * Menjana borang kawalan untuk Laporan
+     */
+    function renderReportForm() {
+        const reportContainer = document.getElementById('report-container');
+        reportContainer.innerHTML = `
+            <h2 class="text-2xl font-semibold text-gray-800 mb-6">Penjana Laporan & Dashboard</h2>
+            <form id="report-filter-form" class="space-y-4 p-4 border border-gray-200 rounded-lg bg-gray-50 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                    <!-- Penapis Tarikh Mula -->
+                    <div class="col-span-1">
+                        <label for="startDate" class="block text-sm font-medium text-gray-700">Tarikh Mula</label>
+                        <input type="date" id="startDate" required class="mt-1 block w-full p-2 border border-gray-300 rounded-lg shadow-sm">
+                    </div>
+                    <!-- Penapis Tarikh Tamat -->
+                    <div class="col-span-1">
+                        <label for="endDate" class="block text-sm font-medium text-gray-700">Tarikh Tamat</label>
+                        <input type="date" id="endDate" required class="mt-1 block w-full p-2 border border-gray-300 rounded-lg shadow-sm">
+                    </div>
+                    <!-- Pilihan Laporan -->
+                    <div class="col-span-1">
+                        <label for="reportType" class="block text-sm font-medium text-gray-700">Jenis Laporan</label>
+                        <select id="reportType" required class="mt-1 block w-full p-2 border border-gray-300 rounded-lg shadow-sm">
+                            <option value="dashboard">5. Dashboard (Ringkasan)</option>
+                            <option value="kod_aktiviti">1. Kod Aktiviti</option>
+                            <option value="kod_sebagai">2. Kod Sebagai</option>
+                            <option value="kod_ptj">3. Kod PTJ</option>
+                            <option value="kod_ppt">4. Kod PPT</option>
+                        </select>
+                    </div>
+                    <!-- Butang Jana Laporan -->
+                    <div class="col-span-1">
+                        <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition duration-200">
+                            Jana Laporan
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <div id="report-output" class="min-h-40 p-4 border border-gray-200 rounded-lg bg-white">
+                <p class="text-gray-500 italic">Sila pilih tempoh dan jenis laporan untuk menjana output.</p>
+            </div>
+        `;
+        
+        document.getElementById('report-filter-form').addEventListener('submit', handleReportGeneration);
+        document.getElementById('reportType').addEventListener('change', updateReportOutputPlaceholder);
+
+        function updateReportOutputPlaceholder() {
+            const output = document.getElementById('report-output');
+            output.innerHTML = '<p class="text-gray-500 italic">Sila klik "Jana Laporan" setelah memilih kriteria.</p>';
+        }
+    }
+
+    /**
+     * Mengendalikan penghantaran borang penapis Laporan.
+     */
+    async function handleReportGeneration(event) {
+        event.preventDefault();
+        const form = event.target;
+        const startDate = form.startDate.value;
+        const endDate = form.endDate.value;
+        const reportType = form.reportType.value;
+        const outputContainer = document.getElementById('report-output');
+        
+        outputContainer.innerHTML = '<p class="text-blue-500 font-semibold flex items-center"><svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Memuatkan data dan menjana laporan...</p>';
+        
+        if (!startDate || !endDate) {
+            showMessage("Sila masukkan Tarikh Mula dan Tarikh Tamat.", 'error', 'report-container');
+            return;
+        }
+
+        const startTimestamp = new Date(startDate);
+        const endTimestamp = new Date(endDate);
+        // Tambah 1 hari untuk memasukkan data pada tarikh akhir
+        endTimestamp.setDate(endTimestamp.getDate() + 1); 
+
+        try {
+            const { combinedMap, pptMap } = await fetchAggregateData(startTimestamp, endTimestamp);
+
+            if (reportType === 'dashboard') {
+                generateDashboard(combinedMap, pptMap, startTimestamp, endTimestamp, outputContainer);
+            } else {
+                generateGroupedReport(reportType, combinedMap, pptMap, startTimestamp, endTimestamp, outputContainer);
+            }
+            showMessage(`Laporan ${reportType.toUpperCase()} berjaya dijana.`, 'success', 'report-container');
+
+        } catch (error) {
+            console.error("Ralat menjana laporan:", error);
+            outputContainer.innerHTML = `<p class="text-red-500">Ralat: Gagal menjana laporan. Sila semak konsol.</p>`;
+            showMessage("Ralat semasa menjana laporan.", 'error', 'report-container');
+        }
+    }
+
+    /**
+     * Mengambil dan mengumpul data dari 3 koleksi untuk mengira Baki.
+     */
+    async function fetchAggregateData(startDate, endDate) {
+        const queryOptions = (collectionName) => query(
+            collection(db, getCollectionPath(collectionName)),
+            where('timestamp', '>=', startDate),
+            where('timestamp', '<', endDate)
+        );
+
+        // 1. Ambil Data Peruntukan
+        const snapshotPeruntukan = await getDocs(queryOptions('peruntukan_records'));
+        const netAllocationMap = {}; // Key: PTJ_ACTIVITY_SEBAGAI
+
+        snapshotPeruntukan.docs.forEach(doc => {
+            const record = doc.data();
+            if (record.peruntukan_line_items) {
+                record.peruntukan_line_items.forEach(item => {
+                    const key = `${record.kod_ptj}_${item.kod_aktiviti}_${item.kod_sebagai}`;
+                    const tambah = parseFloat(item.peruntukan_tambah) || 0;
+                    const tarik = parseFloat(item.peruntukan_tarik) || 0;
+
+                    netAllocationMap[key] = (netAllocationMap[key] || 0) + (tambah - tarik);
+                });
+            }
+        });
+
+        // 2. Ambil Data Transaksi
+        const snapshotTransaksi = await getDocs(queryOptions('transaksi_records'));
+        const transaksiMap = {}; // Key: PTJ_ACTIVITY_SEBAGAI
+        const pptExpMap = {};     // Key: KOD_PPT
+
+        snapshotTransaksi.docs.forEach(doc => {
+            const record = doc.data();
+            if (record.transaksi_line_items) {
+                record.transaksi_line_items.forEach(item => {
+                    const key = `${record.kod_ptj}_${item.kod_aktiviti}_${item.kod_sebagai}`;
+                    const amaun = parseFloat(item.amaun_perbelanjaan) || 0;
+
+                    // Aggregate by PTJ/Aktiviti/Sebagai for BAKI_KEMASKINI
+                    transaksiMap[key] = (transaksiMap[key] || {
+                        total_expenditure: 0,
+                        kod_ppt: item.kod_ppt, // Link the first KOD_PPT found for reference
+                        kod_ptj: record.kod_ptj // Store PTJ for reporting consistency
+                    });
+                    transaksiMap[key].total_expenditure += amaun;
+
+                    // Aggregate by KOD_PPT for BAKI_AMAUN_PPT
+                    const kodPptKey = item.kod_ppt;
+                    if (kodPptKey) {
+                        pptExpMap[kodPptKey] = (pptExpMap[kodPptKey] || { expenditure: 0 });
+                        pptExpMap[kodPptKey].expenditure += amaun;
+                    }
+                });
+            }
+        });
+
+
+        // 3. Ambil Data PPT (PPT Kemaskini)
+        const snapshotPPT = await getDocs(queryOptions('ppt_records'));
+        const pptKemaskiniMap = {}; // Key: KOD_PPT
+
+        snapshotPPT.docs.forEach(doc => {
+            const record = doc.data();
+            const kodPpt = record.kod_ppt;
+            if (kodPpt) {
+                let pptKemaskini = parseFloat(record.ppt_asal) || 0;
+
+                if (record.pindaan_line_items && Array.isArray(record.pindaan_line_items)) {
+                    record.pindaan_line_items.forEach(pindaan => {
+                        const amaunPinda = parseFloat(pindaan.ppt_pinda) || 0;
+                        pptKemaskini += amaunPinda;
+                    });
+                }
+
+                // If multiple PPT records exist for the same KOD_PPT, this takes the latest.
+                // For accuracy, all must be summed/aggregated, but given the time filter, 
+                // we treat it as cumulative updates over time and sum the original + pindaan.
+                // We sum up the total PPT KEMASKINI amount for a given KOD_PPT within the time window.
+                pptKemaskiniMap[kodPpt] = (pptKemaskiniMap[kodPpt] || 0) + pptKemaskini;
+            }
+        });
+
+
+        // 4. Gabungan Data (Final Combined Map)
+        const combinedMap = {}; // Key: PTJ_ACTIVITY_SEBAGAI
+        const ptjActivitySebagaiKeys = new Set([
+            ...Object.keys(netAllocationMap),
+            ...Object.keys(transaksiMap),
+        ]);
+
+        ptjActivitySebagaiKeys.forEach(key => {
+            const [ptj, activity, sebagai] = key.split('_');
+
+            const netAllocation = netAllocationMap[key] || 0;
+            const transactionDetails = transaksiMap[key] || { total_expenditure: 0, kod_ppt: 'N/A', kod_ptj: ptj };
+            
+            const totalExpenditure = transactionDetails.total_expenditure;
+            const kodPpt = transactionDetails.kod_ppt;
+            
+            // Baki Kemaskini
+            const bakiKemaskini = netAllocation - totalExpenditure;
+
+            // Baki PPT (Mengambil kira PPT Kemaskini dan Perbelanjaan yang sepadan)
+            const pptKemaskini = pptKemaskiniMap[kodPpt] || 0;
+            const pptExpenditure = pptExpMap[kodPpt] ? pptExpMap[kodPpt].expenditure : 0;
+            const bakiAmaunPpt = pptKemaskini - pptExpenditure;
+
+
+            // Final object structure
+            combinedMap[key] = {
+                PTJ: ptj,
+                AKTIVITI: activity,
+                SEBAGAI: sebagai,
+                
+                PERUNTUKAN_KEMASKINI: netAllocation,
+                JUMLAH_PERBELANJAAN: totalExpenditure,
+                BAKI_KEMASKINI: bakiKemaskini,
+                
+                KOD_PPT: kodPpt,
+                AMAUN_PPT_KEMASKINI: pptKemaskini,
+                BAKI_AMAUN_PPT: bakiAmaunPpt,
+            };
+        });
+
+        // Add PPTs that had no corresponding transaction items (but had PPT records)
+        Object.keys(pptKemaskiniMap).forEach(kodPpt => {
+            if (!pptExpMap[kodPpt]) {
+                 // Create a placeholder key for PPTs that exist but have no associated transaction item
+                 // This ensures the PPT report reflects all PPTs within the period
+                 const dummyKey = `N/A_N/A_N/A_${kodPpt}`;
+                 if (!combinedMap[dummyKey]) {
+                    combinedMap[dummyKey] = {
+                        PTJ: 'N/A',
+                        AKTIVITI: 'N/A',
+                        SEBAGAI: 'N/A',
+                        
+                        PERUNTUKAN_KEMASKINI: 0,
+                        JUMLAH_PERBELANJAAN: 0,
+                        BAKI_KEMASKINI: 0,
+                        
+                        KOD_PPT: kodPpt,
+                        AMAUN_PPT_KEMASKINI: pptKemaskiniMap[kodPpt],
+                        BAKI_AMAUN_PPT: pptKemaskiniMap[kodPpt], // PPT Kemaskini - 0
+                    };
+                 }
+            }
+        });
+
+        return { combinedMap, pptMap: pptKemaskiniMap };
+    }
+
+
+    /**
+     * Menjana dan memaparkan laporan berkumpulan.
+     */
+    async function generateGroupedReport(reportType, combinedMap, pptMap, startDate, endDate, outputContainer) {
+        const groupByLabel = REPORT_GROUPS[reportType];
+        
+        let groups = {};
+        let totalKeseluruhan = 0;
+        let totalPPTBaki = 0;
+
+        // 1. Kumpulkan data berdasarkan dimensi yang diminta
+        Object.values(combinedMap).forEach(item => {
+            let groupKey;
+
+            // Tentukan kunci kumpulan
+            if (reportType === 'kod_ptj') groupKey = item.PTJ;
+            else if (reportType === 'kod_aktiviti') groupKey = item.AKTIVITI;
+            else if (reportType === 'kod_sebagai') groupKey = item.SEBAGAI;
+            else if (reportType === 'kod_ppt') groupKey = item.KOD_PPT;
+            
+            if (groupKey === 'N/A') return; // Skip N/A placeholders unless absolutely necessary
+
+            if (!groups[groupKey]) {
+                groups[groupKey] = {
+                    groupName: groupKey,
+                    totalPeruntukan: 0,
+                    totalPerbelanjaan: 0,
+                    totalBakiKemaskini: 0,
+                    totalPPTKemaskini: 0,
+                    totalPPTBaki: 0,
+                };
+            }
+
+            // Agregat nilai
+            groups[groupKey].totalPeruntukan += item.PERUNTUKAN_KEMASKINI;
+            groups[groupKey].totalPerbelanjaan += item.JUMLAH_PERBELANJAAN;
+            groups[groupKey].totalBakiKemaskini += item.BAKI_KEMASKINI;
+            
+            // Hanya tambah amaun PPT sekali setiap KOD_PPT unik dalam kumpulan
+            // Logik ini kompleks kerana KOD_PPT mungkin berulang dalam kumpulan lain.
+            // Kita akan terus menggunakan nilai BAKI_AMAUN_PPT yang sudah dikira.
+            groups[groupKey].totalPPTKemaskini += item.AMAUN_PPT_KEMASKINI;
+            groups[groupKey].totalPPTBaki += item.BAKI_AMAUN_PPT;
+        });
+
+        const groupedDataArray = Object.values(groups).sort((a, b) => b.totalBakiKemaskini - a.totalBakiKemaskini);
+
+        if (groupedDataArray.length === 0) {
+             outputContainer.innerHTML = `<p class="text-gray-500 italic">Tiada data transaksi atau peruntukan ditemui dalam tempoh yang dipilih untuk menjana laporan ${groupByLabel}.</p>`;
+             return;
+        }
+
+        let tableHtml = `
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Laporan Agregat Mengikut ${groupByLabel}</h3>
+            <p class="text-sm text-gray-600 mb-4">Tempoh: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}</p>
+            
+            <div class="overflow-x-auto border border-gray-200 rounded-lg max-h-[70vh]">
+                <table class="report-table min-w-full divide-y divide-gray-200 text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${groupByLabel}</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-blue-600 uppercase tracking-wider">Peruntukan Kemaskini (RM)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-red-600 uppercase tracking-wider">Jumlah Perbelanjaan (RM)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-green-600 uppercase tracking-wider">BAKI KEMASKINI (RM)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">PPT Kemaskini (RM)</th>
+                            <th class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">BAKI AMAUN PPT (RM)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-100">
+                        ${groupedDataArray.map(group => {
+                            totalKeseluruhan += group.totalBakiKemaskini;
+                            totalPPTBaki += group.totalPPTBaki; // Total PPT Baki
+                            
+                            const bakiStyle = group.totalBakiKemaskini < 0 ? 'text-red-500 font-bold' : 'text-green-600 font-bold';
+                            const pptBakiStyle = group.totalPPTBaki < 0 ? 'text-red-500 font-bold' : 'text-green-600 font-bold';
+
+                            return `
+                                <tr>
+                                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${group.groupName}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-sm text-right text-blue-600">${group.totalPeruntukan.toFixed(2)}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-sm text-right text-red-600">${group.totalPerbelanjaan.toFixed(2)}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-sm text-right ${bakiStyle}">${group.totalBakiKemaskini.toFixed(2)}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-sm text-right">${group.totalPPTKemaskini.toFixed(2)}</td>
+                                    <td class="px-3 py-3 whitespace-nowrap text-sm text-right ${pptBakiStyle}">${group.totalPPTBaki.toFixed(2)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="text-right p-4 border-t border-gray-300 mt-6 bg-gray-100 rounded-lg shadow-inner">
+                <p class="text-xl font-bold text-gray-800">Jumlah BAKI KEMASKINI Keseluruhan: <span class="${totalKeseluruhan < 0 ? 'text-red-700' : 'text-green-700'}">RM ${totalKeseluruhan.toFixed(2)}</span></p>
+                <p class="text-sm text-gray-600 mt-1">Jumlah BAKI AMAUN PPT Keseluruhan: RM ${totalPPTBaki.toFixed(2)}</p>
+            </div>
+        `;
+
+        outputContainer.innerHTML = tableHtml;
+    }
+
+    /**
+     * Menjana dan memaparkan Dashboard Ringkasan.
+     */
+    function generateDashboard(combinedMap, pptMap, startDate, endDate, outputContainer) {
+        let totalPeruntukan = 0;
+        let totalPerbelanjaan = 0;
+        let totalBakiKemaskini = 0;
+        let totalPPTKemaskini = 0;
+        let totalPPTBaki = 0;
+
+        // NEW LOGIC: Calculate detailed PPT Summary
+        const pptDetailedSummary = {};
+
+        // Aggregate data from combinedMap to calculate overall totals (Peruntukan & Perbelanjaan)
+        Object.values(combinedMap).forEach(item => {
+            totalPeruntukan += item.PERUNTUKAN_KEMASKINI;
+            totalPerbelanjaan += item.JUMLAH_PERBELANJAAN;
+
+            const kodPpt = item.KOD_PPT;
+            if (kodPpt && kodPpt !== 'N/A') {
+                if (!pptDetailedSummary[kodPpt]) {
+                    // Initialize for this specific KOD PPT
+                    pptDetailedSummary[kodPpt] = {
+                        kod: kodPpt,
+                        kemaskini: item.AMAUN_PPT_KEMASKINI, // Total KEMASKINI for this PPT (unique sum from PPT records)
+                        expenditure: 0, // Sum of all associated transaction expenditures
+                        baki: 0
+                    };
+                }
+                
+                // Sum up JUMLAH_PERBELANJAAN (which is total expenditure for PTJ_ACTIVITY_SEBAGAI group)
+                // If multiple PTJ_ACTIVITY_SEBAGAI groups map to the same KOD_PPT, we sum their expenditure.
+                // NOTE: This relies on the fact that JUMLAH_PERBELANJAAN in combinedMap is already filtered by time.
+                pptDetailedSummary[kodPpt].expenditure += item.JUMLAH_PERBELANJAAN;
+            }
+        });
+
+        // Sum up total PPT Kemaskini and finalize BAKI calculation for detailed summary
+        Object.keys(pptMap).forEach(kodPpt => {
+            const kemaskiniAmaun = pptMap[kodPpt]; // This is AMAUN_PPT_KEMASKINI
+            totalPPTKemaskini += kemaskiniAmaun;
+            
+            if (!pptDetailedSummary[kodPpt]) {
+                // KOD_PPT exists in PPT records but has no transaction/expenditure associated (will have 0 expenditure)
+                pptDetailedSummary[kodPpt] = {
+                    kod: kodPpt,
+                    kemaskini: kemaskiniAmaun,
+                    expenditure: 0,
+                };
+            } else {
+                // Ensure Kemaskini is set correctly (although it should be the same as initialized)
+                pptDetailedSummary[kodPpt].kemaskini = kemaskiniAmaun;
+            }
+
+            // Calculate final BAKI and contribute to overall PPT Baki Total
+            pptDetailedSummary[kodPpt].baki = pptDetailedSummary[kodPpt].kemaskini - pptDetailedSummary[kodPpt].expenditure;
+            totalPPTBaki += pptDetailedSummary[kodPpt].baki;
+        });
+
+        const pptSummaryArray = Object.values(pptDetailedSummary).sort((a, b) => a.kod.localeCompare(b.kod)); // Sort by KOD PPT
+
+        // Baki Kemaskini Keseluruhan
+        totalBakiKemaskini = totalPeruntukan - totalPerbelanjaan;
+
+
+        // --- Paparan PPT Detail Table ---
+        let pptDetailTableHtml = '';
+        
+        if (pptSummaryArray.length > 0) {
+            pptDetailTableHtml = `
+                <h4 class="text-lg font-semibold text-gray-800 mt-6 mb-3 border-t pt-4">Ringkasan PPT Mengikut Kod</h4>
+                <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kod PPT</th>
+                                <th class="px-3 py-2 text-right text-xs font-medium text-blue-600 uppercase tracking-wider">PPT Kemaskini (RM)</th>
+                                <th class="px-3 py-2 text-right text-xs font-medium text-red-600 uppercase tracking-wider">Perbelanjaan (RM)</th>
+                                <th class="px-3 py-2 text-right text-xs font-medium text-green-600 uppercase tracking-wider">BAKI AMAUN PPT (RM)</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-100">
+                            ${pptSummaryArray.map(item => {
+                                const bakiStyle = item.baki < 0 ? 'text-red-500 font-bold' : 'text-green-600 font-bold';
+                                return `
+                                    <tr>
+                                        <td class="px-3 py-2 whitespace-nowrap font-medium text-gray-900">${item.kod}</td>
+                                        <td class="px-3 py-2 whitespace-nowrap text-right text-blue-600">${item.kemaskini.toFixed(2)}</td>
+                                        <td class="px-3 py-2 whitespace-nowrap text-right text-red-600">${item.expenditure.toFixed(2)}</td>
+                                        <td class="px-3 py-2 whitespace-nowrap text-right ${bakiStyle}">${item.baki.toFixed(2)}</td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                            <tr class="bg-gray-100 font-bold">
+                                <td class="px-3 py-2 text-left">JUMLAH KESELURUHAN</td>
+                                <td class="px-3 py-2 text-right">${totalPPTKemaskini.toFixed(2)}</td>
+                                <td class="px-3 py-2 text-right text-red-700">${(totalPPTKemaskini - totalPPTBaki).toFixed(2)}</td>
+                                <td class="px-3 py-2 text-right ${totalPPTBaki < 0 ? 'text-red-700' : 'text-green-700'}">${totalPPTBaki.toFixed(2)}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            pptDetailTableHtml = `<p class="text-sm text-gray-500 mt-4 border-t pt-4">Tiada rekod PPT ditemui dalam tempoh ini.</p>`;
+        }
+
+
+        // --- Paparan Dashboard ---
+        outputContainer.innerHTML = `
+            <h3 class="text-xl font-semibold text-gray-700 mb-4">Dashboard Ringkasan Kewangan</h3>
+            <p class="text-sm text-gray-600 mb-6">Tempoh: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Kad 1: Peruntukan Kemaskini Bersih -->
+                <div class="bg-blue-50 p-6 rounded-xl border border-blue-200 shadow-md">
+                    <p class="text-sm font-medium text-blue-600">Peruntukan Kemaskini Bersih</p>
+                    <p class="text-3xl font-bold text-blue-800 mt-1">RM ${totalPeruntukan.toFixed(2)}</p>
+                    <p class="text-xs text-gray-500 mt-2">Agregat (Tambah - Tarik) dalam tempoh.</p>
+                </div>
+                
+                <!-- Kad 2: Jumlah Perbelanjaan -->
+                <div class="bg-red-50 p-6 rounded-xl border border-red-200 shadow-md">
+                    <p class="text-sm font-medium text-red-600">Jumlah Perbelanjaan</p>
+                    <p class="text-3xl font-bold text-red-800 mt-1">RM ${totalPerbelanjaan.toFixed(2)}</p>
+                    <p class="text-xs text-gray-500 mt-2">Keseluruhan amaun perbelanjaan.</p>
+                </div>
+
+                <!-- Kad 3: Baki Kemaskini (Peruntukan - Perbelanjaan) -->
+                <div class="p-6 rounded-xl border shadow-md ${totalBakiKemaskini < 0 ? 'bg-red-100 border-red-300' : 'bg-green-100 border-green-300'}">
+                    <p class="text-sm font-medium ${totalBakiKemaskini < 0 ? 'text-red-700' : 'text-green-700'}">BAKI KEMASKINI KESELURUHAN</p>
+                    <p class="text-3xl font-bold ${totalBakiKemaskini < 0 ? 'text-red-900' : 'text-green-900'} mt-1">RM ${totalBakiKemaskini.toFixed(2)}</p>
+                    <p class="text-xs text-gray-600 mt-2">Jumlah peruntukan tolak perbelanjaan.</p>
+                </div>
+            </div>
+            
+            <!-- Bahagian Baharu: Ringkasan PPT Terperinci -->
+            ${pptDetailTableHtml}
+            
+            <p class="mt-8 text-md font-semibold text-gray-700 border-t pt-4">Nota:</p>
+            <ul class="list-disc list-inside text-sm text-gray-600 ml-4 space-y-1">
+                <li>Angka-angka ini adalah agregasi rekod yang dikunci masuk dalam tempoh yang dipilih sahaja.</li>
+            </ul>
+        `;
+    }
+
+    // --- LOGIK BORANG ENTRY (TIDAK BERUBAH) ---
+
+    /**
+     * Mengira dan memaparkan jumlah perbelanjaan semasa.
+     */
+    function updateTransaksiTotal() {
+        const amaunInputs = document.querySelectorAll('#transaksi-table-body .amaun-input');
+        let total = 0;
+        
+        amaunInputs.forEach(input => {
+            const value = parseFloat(input.value) || 0;
+            total += value;
+        });
+
+        document.getElementById('total-expenditure-display').textContent = total.toFixed(2);
+    }
+
+    /**
+     * Melampirkan event listeners untuk borang Line Item (Jadual)
+     */
+    function attachTableListeners(formKey, fieldDefs, rowClass, tableBodyId, addRowBtnId, rowCreator) {
+        const tableBody = document.getElementById(tableBodyId);
+        const addRowBtn = document.getElementById(addRowBtnId);
+
+        if (addRowBtn) {
+            addRowBtn.addEventListener('click', () => {
+                tableBody.insertAdjacentHTML('beforeend', rowCreator(fieldDefs));
+                if (formKey === 'transaksi') {
+                    updateTransaksiTotal();
+                }
+            });
+        }
+
+        // Event listener untuk membuang baris dalam jadual
+        tableBody.addEventListener('click', function(e) {
+            if (e.target.closest('.remove-btn')) {
+                const row = e.target.closest(`.${rowClass}`);
+                // Pastikan sentiasa ada sekurang-kurangnya satu baris kekal
+                if (tableBody.children.length > 1) {
+                    row.remove();
+                    if (formKey === 'transaksi') {
+                        updateTransaksiTotal();
+                    }
+                } else {
+                    showMessage("Baris pertama butiran tidak boleh dibuang.", 'error');
+                }
+            }
+        });
+    }
+
+
+    /**
+     * Mengendalikan penghantaran borang.
+     */
+    function handleFormSubmit(event) {
+        event.preventDefault();
+        const form = event.target;
+        const formKey = currentCollection.split('_')[0];
+        const formDef = formDefinitions[formKey];
+        const data = {};
+        let totalExpenditure = 0;
+
+        // --- 1. Proses Header Fields (semua borang) ---
+        formDef.fields.forEach(field => {
+            const input = form.querySelector(`[name="${field.name}"]`);
+            let value = input ? input.value : null;
+
+            if (field.type === 'number') {
+                data[field.name] = parseFloat(value) || 0;
+            } else if (field.type === 'date' && !value) {
+                data[field.name] = null;
+            }
+            else {
+                data[field.name] = value;
+            }
+
+            // Pengesahan untuk medan header wajib
+            // Cek jika medan wajib DAN nilainya kosong/null/NaN
+            if (field.required && (data[field.name] === null || data[field.name] === '' || (typeof data[field.name] === 'number' && isNaN(data[field.name]) && data[field.name] === 0))) {
+                showMessage(`Medan header '${field.label}' adalah wajib.`, 'error');
+                throw new Error('Required single field is empty');
+            }
+        });
+
+        // --- 2. Proses Line Items (Hanya Peruntukan & Transaksi) ---
+        if (formKey === 'peruntukan' || formKey === 'transaksi') {
+            const lineItems = [];
+            const rowClass = formKey === 'peruntukan' ? 'peruntukan-row' : 'transaksi-row';
+            const tableBodyId = formKey === 'peruntukan' ? 'peruntukan-table-body' : 'transaksi-table-body';
+            const rows = form.querySelectorAll(`#${tableBodyId} .${rowClass}`);
+            
+            // PENGESAHAN: Wajib ada sekurang-kurangnya satu baris butiran.
+            if (rows.length === 0) {
+                 showMessage(`Sila masukkan sekurang-kurangnya satu baris Butiran ${formKey.toUpperCase()}.`, 'error');
+                 throw new Error('No line items entered');
+            }
+
+            // Bendera untuk mengelakkan mesej ralat berganda
+            let specificError = false;
+
+            rows.forEach(row => {
+                if (specificError) return; // Skip subsequent rows if error is found
+
+                const item = {};
+                let isValid = true;
+                
+                formDef.line_item_fields.forEach(field => {
+                    const input = row.querySelector(`[name="${field.name}[]"]`);
+                    let value = input ? input.value : '';
+
+                    if (field.type === 'number') {
+                        item[field.name] = parseFloat(value) || 0;
+                        // KEMAS KINI PENGESAHAN: Medan number wajib diisi
+                        if (field.required && (value === '' || isNaN(parseFloat(value)))) isValid = false;
+                        
+                        // Kira jumlah perbelanjaan untuk Transaksi
+                        if (formKey === 'transaksi' && field.name === 'amaun_perbelanjaan') {
+                            totalExpenditure += item[field.name];
+                        }
+
+                    } else {
+                        item[field.name] = value.trim();
+                        // KEMAS KINI PENGESAHAN: Medan teks/tarikh wajib diisi
+                        if (field.required && value.trim() === '') isValid = false;
+                    }
+                });
+                
+                // PENGESAHAN KHUSUS:
+                if (formKey === 'peruntukan') {
+                    const tambah = item.peruntukan_tambah;
+                    const tarik = item.peruntukan_tarik;
+                    
+                    if (tambah === 0 && tarik === 0) {
+                        isValid = false;
+                        specificError = true; // Set bendera
+                        showMessage(`Medan 'Tambah (+)' ATAU 'Tarik (-)' mesti mempunyai nilai bukan sifar untuk setiap baris Butiran Peruntukan.`, 'error');
+                        return; // Keluar dari forEach baris ini
+                    }
+                }
+                
+                if (isValid) {
+                    lineItems.push(item);
+                } else {
+                    showMessage(`Sila lengkapkan semua medan wajib dalam butiran ${formKey.toUpperCase()}.`, 'error');
+                    throw new Error('Incomplete required line item');
+                }
+            });
+
+            if (specificError) {
+                 // Hentikan proses penghantaran jika ralat khusus ditemui
+                 throw new Error('Specific line item validation failed');
+            }
+
+            if (formKey === 'peruntukan') {
+                 data['peruntukan_line_items'] = lineItems; // Simpan sebagai array of objects
+            } else if (formKey === 'transaksi') {
+                data['transaksi_line_items'] = lineItems; // Simpan sebagai array of objects
+                data['total_expenditure'] = totalExpenditure; // Simpan jumlah keseluruhan
+                
+                // Pengecualian: Jika amaun perbelanjaan wajib, jumlah mestilah > 0
+                if (totalExpenditure <= 0 && formDef.line_item_fields.find(f => f.name === 'amaun_perbelanjaan' && f.required)) {
+                    showMessage(`Amaun Perbelanjaan wajib mempunyai jumlah lebih besar daripada RM 0.00.`, 'error');
+                    throw new Error('Total expenditure cannot be zero');
+                }
+            }
+        } 
+        
+        // --- 3. Logik Khas untuk PPT (Rekod Baru) ---
+        if (formKey === 'ppt') {
+            // Butiran pindaan diuruskan melalui modal Pinda, jadi kita mulakan dengan array kosong.
+            data['pindaan_line_items'] = [];
+        }
+
+
+        // Jika tiada ralat pengesahan, simpan data
+        saveData(data, currentCollection);
+        
+        // Reset borang
+        renderEntryForm(formKey);
+    }
+
+    // --- PAPARAN DATA KUNCI MASUK ---
+
+    let unsubscribe = null;
+
+    /**
+     * Menetapkan listener real-time onSnapshot untuk data terkini.
+     */
+    function listenForDataChanges(collectionName) {
+        if (unsubscribe) {
+            unsubscribe(); // Hentikan listener lama
+        }
+
+        if (!currentUserId) {
+            document.getElementById('loading-data-message').textContent = "Menunggu pengesahan pengguna...";
+            return;
+        }
+
+        // Mengehadkan kepada 5 rekod untuk REKOD PERUNTUKAN dan PPT sahaja.
+        let dataQuery = collection(db, getCollectionPath(collectionName));
+        if (collectionName !== 'transaksi_records') {
+            dataQuery = query(dataQuery, orderBy("timestamp", "desc"), limit(5));
+        } else {
+            dataQuery = query(dataQuery, orderBy("timestamp", "desc")); // Tiada had untuk TRANSAKSI
+        }
+        
+        unsubscribe = onSnapshot(dataQuery, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            renderRecentData(data, collectionName.split('_')[0]);
+        }, (error) => {
+            console.error("Ralat mendengar perubahan data:", error);
+            document.getElementById('recent-data').innerHTML = `<p class="text-red-500">Ralat memuatkan data: ${error.message}</p>`;
+        });
+    }
+
+    /**
+     * Menjana jadual HTML untuk data terkini.
+     */
+    function renderRecentData(data, formKey) {
+        const container = document.getElementById('recent-data');
+        if (data.length === 0) {
+            container.innerHTML = `<p class="text-gray-500 italic">Tiada rekod ${formKey.toUpperCase()} yang dijumpai.</p>`;
+            return;
+        }
+
+        const formDef = formDefinitions[formKey];
+        if (!formDef) return;
+
+        let headers = [];
+        let rowMapper;
+        let isPPT = formKey === 'ppt';
+        let isPeruntukan = formKey === 'peruntukan';
+        let isTransaksi = formKey === 'transaksi';
+
+
+        if (isPeruntukan || isTransaksi) {
+            // Peruntukan & Transaksi: Header + Ringkasan Line Item (Kod Aktiviti, Kod Sebagai & Jumlah) + Tindakan
+            headers = formDef.fields.map(f => f.label.replace(/ \(.*\)/, '')).concat(['Kod Aktiviti', 'Kod Sebagai', (isPeruntukan ? 'Amaun Bersih (RM)' : 'Amaun Perbelanjaan (RM)'), 'Tindakan']);
+            rowMapper = (item) => {
+                const lineItems = isPeruntukan ? (item.peruntukan_line_items || []) : (item.transaksi_line_items || []);
+                const lineItemsCount = lineItems.length;
+                
+                let totalAmaun = 0;
+                let kodSebagaiList = [];
+                let kodAktivitiList = []; // Untuk menyimpan senarai Kod Aktiviti
+
+                if (isPeruntukan) {
+                    lineItems.forEach(line => {
+                        totalAmaun += (parseFloat(line.peruntukan_tambah) || 0) - (parseFloat(line.peruntukan_tarik) || 0);
+                        if (line.kod_sebagai && !kodSebagaiList.includes(line.kod_sebagai)) {
+                            kodSebagaiList.push(line.kod_sebagai);
+                        }
+                        if (line.kod_aktiviti && !kodAktivitiList.includes(line.kod_aktiviti)) {
+                             kodAktivitiList.push(line.kod_aktiviti);
+                        }
+                    });
+                } else { // Transaksi
+                    totalAmaun = item.total_expenditure || 0;
+                     lineItems.forEach(line => {
+                        if (line.kod_sebagai && !kodSebagaiList.includes(line.kod_sebagai)) {
+                            kodSebagaiList.push(line.kod_sebagai);
+                        }
+                        if (line.kod_aktiviti && !kodAktivitiList.includes(line.kod_aktiviti)) {
+                            kodAktivitiList.push(line.kod_aktiviti);
+                        }
+                    });
+                }
+                
+                const fields = formDef.fields.map(field => {
+                    let value = item[field.name];
+                    return `<td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${value || 'N/A'}</td>`;
+                }).join('');
+                
+                const amaunStyle = (isPeruntukan && totalAmaun < 0) || (isTransaksi && totalAmaun > 0) ? 'text-red-600 font-bold' : 'text-green-600 font-bold';
+                const amaunDisplay = isPeruntukan ? totalAmaun.toFixed(2) : totalAmaun.toFixed(2);
+                
+                // Format Tarikh Kunci Masuk
+                const formattedDate = item.timestamp ? new Date(item.timestamp.toDate()).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Pending...';
+
+
+                const actionButtons = `
+                    <div class="flex flex-col items-center justify-center space-y-1">
+                        <div class="flex items-center space-x-2">
+                             <!-- Ikon Lihat Butiran (Gantikan Kemaskini) -->
+                            <button type="button" class="view-butiran-btn text-blue-600 hover:text-blue-800 transition duration-150" 
+                                    data-doc-id="${item.id}" data-form-key="${formKey}" title="Lihat Butiran Rekod">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            </button>
+                            <!-- Butang Hapus Rekod -->
+                            <button type="button" class="delete-btn text-red-600 hover:text-red-800 transition duration-150" 
+                                    data-doc-id="${item.id}" data-collection="${currentCollection}" title="Hapus Rekod Keseluruhan">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 text-center w-full">${formattedDate}</p>
+                    </div>
+                `;
+
+                return `${fields}
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" title="Jumlah baris: ${lineItemsCount}">${kodAktivitiList.join(', ')}</td>
+                    <td class="px-3 py-3 text-sm text-gray-900">${kodSebagaiList.join(', ')}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm ${amaunStyle}">${amaunDisplay}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${actionButtons}</td>`;
+            };
+
+        }
+        else if (isPPT) {
+            // PPT: Header + Ringkasan Pindaan + Tindakan
+            headers = formDef.fields.map(f => f.label.replace(/ \(.*\)/, '')).concat(['Butiran Pindaan', 'Tindakan']);
+            rowMapper = (item) => {
+                const pindaanCount = item.pindaan_line_items ? item.pindaan_line_items.length : 0;
+                const latestPindaan = pindaanCount > 0 
+                    ? `(${pindaanCount} Baris, Akhir: ${item.pindaan_line_items[pindaanCount - 1].ppt_pinda.toFixed(2)})` 
+                    : 'Tiada Pindaan';
+                
+                // Format Tarikh Kunci Masuk
+                const formattedDate = item.timestamp ? new Date(item.timestamp.toDate()).toLocaleDateString('ms-MY', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Pending...';
+
+                const fields = formDef.fields.map(field => {
+                    let value = item[field.name];
+                    if (field.type === 'number') {
+                        value = value !== undefined ? `RM ${value.toFixed(2)}` : 'N/A';
+                    } else if (field.type === 'date') {
+                        value = value || 'N/A';
+                    } else {
+                        value = value || 'N/A';
+                    }
+                    return `<td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${value}</td>`;
+                }).join('');
+
+                const actionButtons = `
+                    <div class="flex flex-col items-center justify-center space-y-1">
+                        <div class="flex items-center space-x-2">
+                            <!-- Butang Pinda (Modal) -->
+                            <button type="button" class="pinda-btn text-blue-600 hover:text-blue-800 transition duration-150" 
+                                    data-doc-id="${item.id}" data-kod-ppt="${item.kod_ppt}" title="Tambah Pindaan Baharu">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                            </button>
+                            <!-- Butang Hapus Rekod -->
+                            <button type="button" class="delete-btn text-red-600 hover:text-red-800 transition duration-150" 
+                                    data-doc-id="${item.id}" data-collection="${currentCollection}" title="Hapus Rekod Keseluruhan">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-500 text-center w-full">${formattedDate}</p>
+                    </div>
+                `;
+
+                return `${fields}
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${latestPindaan}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900">${actionButtons}</td>`;
+            };
+        }
+        
+        const tableHtml = `
+            <table class="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
+                <thead class="bg-gray-50">
+                    <tr>
+                        ${headers.map(header => `<th class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${header}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    ${data.map(item => `
+                        <tr>
+                            ${rowMapper(item)}
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+        container.innerHTML = tableHtml;
+        
+        // Pasang listeners umum untuk tindakan
+        document.querySelectorAll('.pinda-btn').forEach(btn => {
+            btn.addEventListener('click', openPindaanModal);
+        });
+        
+        document.querySelectorAll('.view-butiran-btn').forEach(btn => {
+            btn.addEventListener('click', openButiranModal);
+        });
+        
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const docId = e.currentTarget.getAttribute('data-doc-id');
+                const collectionName = e.currentTarget.getAttribute('data-collection');
+                deleteRecord(docId, collectionName);
+            });
+        });
+    }
+    
+    // --- LOGIK MODAL BUTIRAN (PERUNTUKAN/TRANSAKSI) ---
+    const butiranModal = document.getElementById('butiranModal');
+    const closeButiranModalBtn = document.getElementById('closeButiranModalBtn');
+    const butiranModalTitle = document.getElementById('butiran-modal-title');
+    const butiranModalContent = document.getElementById('butiran-modal-content');
+    const deleteRecordFromModalBtn = document.getElementById('deleteRecordFromModalBtn');
+
+    closeButiranModalBtn.addEventListener('click', () => {
+        butiranModal.classList.remove('modal-active');
+        butiranModal.classList.add('hidden');
+    });
+    
+    // Global variable untuk menyimpan rekod semasa dalam modal
+    let currentModalRecord = null;
+    let currentModalCollection = null;
+
+    deleteRecordFromModalBtn.addEventListener('click', async () => {
+        if (currentModalRecord && currentModalCollection) {
+            await deleteRecord(currentModalRecord.id, currentModalCollection);
+            // Tutup modal selepas delete
+            butiranModal.classList.remove('modal-active');
+            butiranModal.classList.add('hidden');
+            currentModalRecord = null;
+            currentModalCollection = null;
+        }
+    });
+
+    async function openButiranModal(event) {
+        const button = event.currentTarget;
+        const docId = button.getAttribute('data-doc-id');
+        const formKey = button.getAttribute('data-form-key');
+        const collectionName = formDefinitions[formKey].collection;
+        
+        currentModalCollection = collectionName;
+
+        butiranModalTitle.textContent = `Memuatkan Butiran Rekod...`;
+        butiranModalContent.innerHTML = '<p class="text-gray-500 italic flex items-center"><svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Memuatkan...</p>';
+        butiranModal.classList.remove('hidden');
+        butiranModal.classList.add('modal-active');
+
+        try {
+            const docRef = doc(db, getCollectionPath(collectionName), docId);
+            const docSnap = await getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const record = { id: docSnap.id, ...docSnap.data() };
+                currentModalRecord = record;
+                renderButiranModalContent(record, formKey);
+            } else {
+                butiranModalContent.innerHTML = '<p class="text-red-500">Rekod tidak dijumpai.</p>';
+            }
+        } catch (error) {
+            console.error("Error fetching record for modal:", error);
+            butiranModalContent.innerHTML = '<p class="text-red-500">Ralat memuatkan butiran.</p>';
+        }
+    }
+    
+    function renderButiranModalContent(record, formKey) {
+        const formDef = formDefinitions[formKey];
+        butiranModalTitle.textContent = `Butiran Rekod ${formKey.toUpperCase()}`;
+        
+        let headerHtml = `
+            <div class="space-y-2 mb-4 p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm font-semibold text-gray-700">ID Rekod: <span class="font-normal text-indigo-600">${record.id}</span></p>
+        `;
+        
+        // Header Fields
+        formDef.fields.forEach(field => {
+            let value = record[field.name];
+            if (field.type === 'number') {
+                value = value !== undefined ? `RM ${value.toFixed(2)}` : 'N/A';
+            } else if (field.type === 'date' && value) {
+                value = value;
+            } else if (field.type === 'textarea') {
+                 value = value || 'N/A';
+                 value = value.replace(/\n/g, '<br>');
+            } else {
+                value = value || 'N/A';
+            }
+            headerHtml += `<p class="text-sm"><span class="font-medium">${field.label}:</span> <span class="font-normal">${value}</span></p>`;
+        });
+        headerHtml += `</div>`;
+
+        let lineItemHtml = '';
+        
+        if (formKey === 'peruntukan') {
+            const lineItems = record.peruntukan_line_items || [];
+            if (lineItems.length > 0) {
+                const headers = formDef.line_item_fields.map(f => f.label).join('</th><th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">');
+                
+                lineItemHtml = `
+                    <h4 class="text-lg font-semibold text-gray-800 my-4">Butiran Peruntukan (${lineItems.length} Baris)</h4>
+                    <div class="overflow-x-auto border rounded-lg">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${headers}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100">
+                                ${lineItems.map(item => `
+                                    <tr>
+                                        <td class="px-3 py-2">${item.kod_aktiviti || 'N/A'}</td>
+                                        <td class="px-3 py-2">${item.kod_sebagai || 'N/A'}</td>
+                                        <td class="px-3 py-2 text-right text-green-600">${(item.peruntukan_tambah || 0).toFixed(2)}</td>
+                                        <td class="px-3 py-2 text-right text-red-600">${(item.peruntukan_tarik || 0).toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+        } 
+        else if (formKey === 'transaksi') {
+            const lineItems = record.transaksi_line_items || [];
+             if (lineItems.length > 0) {
+                const headers = formDef.line_item_fields.map(f => f.label).join('</th><th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">');
+                
+                lineItemHtml = `
+                    <h4 class="text-lg font-semibold text-gray-800 my-4">Butiran Perbelanjaan (${lineItems.length} Baris)</h4>
+                    <div class="overflow-x-auto border rounded-lg">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${headers}</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-100">
+                                ${lineItems.map(item => `
+                                    <tr>
+                                        <td class="px-3 py-2">${item.kod_aktiviti || 'N/A'}</td>
+                                        <td class="px-3 py-2">${item.kod_sebagai || 'N/A'}</td>
+                                        <td class="px-3 py-2">${item.kod_akaun || 'N/A'}</td>
+                                        <td class="px-3 py-2">${item.kod_ppt || 'N/A'}</td>
+                                        <td class="px-3 py-2 text-right text-red-600">${(item.amaun_perbelanjaan || 0).toFixed(2)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-right p-3 mt-2 font-bold text-gray-800">
+                        Jumlah Keseluruhan: <span class="text-red-600">RM ${record.total_expenditure ? record.total_expenditure.toFixed(2) : '0.00'}</span>
+                    </div>
+                `;
+            }
+        }
+
+        butiranModalContent.innerHTML = headerHtml + lineItemHtml;
+    }
+
+    // --- LOGIK MODAL PINDAAN PPT ---
+
+    const pindaanModal = document.getElementById('pindaanModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const pindaanForm = document.getElementById('pindaan-form');
+
+    closeModalBtn.addEventListener('click', () => {
+        pindaanModal.classList.remove('modal-active');
+        pindaanModal.classList.add('hidden');
+    });
+
+    /**
+     * Membuka modal pindaan dengan data rekod yang dipilih.
+     */
+    function openPindaanModal(event) {
+        const button = event.currentTarget;
+        const docId = button.getAttribute('data-doc-id');
+        const kodPpt = button.getAttribute('data-kod-ppt');
+
+        // Mengemas kini KOD PPT di subtitle
+        document.getElementById('modal-kod-ppt').textContent = kodPpt;
+
+        pindaanForm.setAttribute('data-doc-id', docId);
+
+        // Reset form inputs
+        pindaanForm.reset();
+
+        pindaanModal.classList.remove('hidden');
+        pindaanModal.classList.add('modal-active');
+    }
+
+    /**
+     * Mengendalikan penghantaran data pindaan baharu dan mengemaskini Firestore.
+     */
+    pindaanForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        
+        const docId = pindaanForm.getAttribute('data-doc-id');
+        const kodPpt = document.getElementById('modal-kod-ppt').textContent;
+        
+        const rujukan = document.getElementById('pindaan_rujukan').value.trim();
+        const tarikh = document.getElementById('pindaan_tarikh').value;
+        const amaun = parseFloat(document.getElementById('pindaan_amaun').value) || 0;
+
+        const newPindaan = {
+            no_rujukan_pindaan: rujukan,
+            tarikh_pindaan: tarikh,
+            ppt_pinda: amaun
+        };
+        
+        // Pengesahan modal (semua wajib)
+        if (rujukan === '' || tarikh === '' || isNaN(amaun) || document.getElementById('pindaan_amaun').value === '') {
+            showMessage("Semua medan dalam modal Pindaan PPT adalah wajib diisi.", 'error', 'pindaanModal');
+            return;
+        }
+
+        const docRef = doc(db, getCollectionPath('ppt_records'), docId);
+        
+        try {
+            await updateDoc(docRef, {
+                pindaan_line_items: arrayUnion(newPindaan)
+            });
+
+            showMessage(`Pindaan baharu bagi KOD PPT ${kodPpt} berjaya disimpan.`, 'success');
+            pindaanModal.classList.remove('modal-active');
+            pindaanModal.classList.add('hidden');
+            
+        } catch (error) {
+            console.error("Ralat mengemas kini dokumen PPT:", error);
+            showMessage("Ralat semasa menyimpan pindaan. Sila semak konsol.", 'error', 'pindaanModal');
+        }
+    });
+
+    // --- INISIALISASI APLIKASI ---
+    
+    // Listener perubahan status pengesahan
+    onAuthStateChanged(auth, (user) => {
+        const statusElement = document.getElementById('auth-status');
+        const userIdElement = document.getElementById('user-id');
+        
+        if (user) {
+            currentUserId = user.uid;
+            statusElement.textContent = `Berjaya disahkan (ID: ${user.isAnonymous ? 'Anon' : 'Custom'})`;
+            statusElement.classList.remove('text-blue-600');
+            statusElement.classList.add('text-green-600');
+            userIdElement.textContent = currentUserId;
+
+            // Render borang lalai (Peruntukan) selepas pengesahan
+            switchView('entry', 'peruntukan');
+        } else {
+            statusElement.textContent = "Gagal mengesahkan pengguna.";
+            statusElement.classList.remove('text-blue-600');
+            statusElement.classList.add('text-red-600');
+            currentUserId = null;
+        }
+    });
+
+    // Event listeners untuk tab/butang
+    document.querySelectorAll('.tab-button').forEach(button => {
+        button.addEventListener('click', function() {
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active', 'bg-green-500', 'text-white');
+                btn.classList.add('text-gray-700', 'hover:bg-white');
+            });
+            this.classList.add('active', 'bg-green-500', 'text-white');
+            this.classList.remove('text-gray-700', 'hover:bg-white');
+
+            const formKey = this.getAttribute('data-form');
+            const tabType = this.getAttribute('data-tab-type');
+            
+            switchView(tabType, formKey);
+        });
+    });
+
+    // Mulakan proses pengesahan
+    setupAuth();
+
+</script>
+</body>
+</html>
