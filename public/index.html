@@ -9,8 +9,12 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
         .tab-button.active { background-color: #10b981; color: white; box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.5), 0 2px 4px -1px rgba(16, 185, 129, 0.06); }
-        input[type="number"]::-webkit-inner-spin-button, 
-        input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+        appearance: none;
+        -webkit-appearance: none;
+        margin: 0;
+        }
         input[type="number"] { -moz-appearance: textfield; }
         /* Style untuk butang remove baris */
         .remove-btn { line-height: 1; padding: 0.5rem 0.75rem; }
@@ -149,15 +153,7 @@
       appId: "1:198638240358:web:4dfe1ac4e335c840ed23a7",
       measurementId: "G-Q7RZVC865D"
     };
-    const firebaseConfig = {
-      apiKey: "AIzaSyB_3eEYGBcH03Npo55Fneq8s-XDGoearM",
-      authDomain: "rekod-kewangan-janm-melaka.firebaseapp.com",
-      projectId: "rekod-kewangan-janm-melaka",
-      storageBucket: "rekod-kewangan-janm-melaka.appspot.com",
-      messagingSenderId: "198638240358",
-      appId: "1:198638240358:web:4dfe1ac4e335c840ed23a7"
-    };
-
+    
 
     // Inisialisasi Firebase
     const app = initializeApp(firebaseConfig);
