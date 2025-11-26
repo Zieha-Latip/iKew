@@ -139,13 +139,32 @@
 
     // Tetapan Wajib dari Persekitaran Canvas
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    const firebaseConfig = {
+      apiKey: "AIzaSyB_B3eEYGBcH03Npo55Fneq8s-XDGoearM",
+      authDomain: "rekod-kewangan-janm-melaka.firebaseapp.com",
+      databaseURL: "https://rekod-kewangan-janm-melaka-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "rekod-kewangan-janm-melaka",
+      storageBucket: "rekod-kewangan-janm-melaka.firebasestorage.app",
+      messagingSenderId: "198638240358",
+      appId: "1:198638240358:web:4dfe1ac4e335c840ed23a7",
+      measurementId: "G-Q7RZVC865D"
+    };
+    const firebaseConfig = {
+      apiKey: "AIzaSyB_3eEYGBcH03Npo55Fneq8s-XDGoearM",
+      authDomain: "rekod-kewangan-janm-melaka.firebaseapp.com",
+      projectId: "rekod-kewangan-janm-melaka",
+      storageBucket: "rekod-kewangan-janm-melaka.appspot.com",
+      messagingSenderId: "198638240358",
+      appId: "1:198638240358:web:4dfe1ac4e335c840ed23a7"
+    };
+
 
     // Inisialisasi Firebase
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const auth = getAuth(app);
+    setupAuth();
+
     // setLogLevel('debug'); // Aktifkan log untuk debugging
 
     let currentUserId = null;
@@ -157,18 +176,16 @@
      * Menyediakan pengesahan pengguna.
      */
     async function setupAuth() {
-        const statusElement = document.getElementById('auth-status');
-        try {
-            if (initialAuthToken) {
-                await signInWithCustomToken(auth, initialAuthToken);
-            } else {
-                await signInAnonymously(auth);
-            }
-        } catch (error) {
-            console.error("Ralat pengesahan Firebase:", error);
-            statusElement.textContent = `Ralat pengesahan: ${error.message}`;
-        }
+      const statusElement = document.getElementById('auth-status');
+      try {
+        await signInAnonymously(auth);
+        statusElement.textContent = "Log masuk sebagai pengguna anonymous berjaya.";
+      } catch (error) {
+        console.error("Ralat pengesahan Firebase:", error);
+        statusElement.textContent = `Ralat pengesahan: ${error.message}`;
+      }
     }
+
 
     /**
      * Memperoleh laluan koleksi awam (public) berdasarkan ID Aplikasi.
@@ -646,12 +663,15 @@
         endTimestamp.setDate(endTimestamp.getDate() + 1); 
 
         try {
-            const { combinedMap, pptMap } = await fetchAggregateData(startTimestamp, endTimestamp);
+            // UPDATED: Destructure pptExpMap
+            const { combinedMap, pptMap, pptExpMap } = await fetchAggregateData(startTimestamp, endTimestamp);
 
             if (reportType === 'dashboard') {
-                generateDashboard(combinedMap, pptMap, startTimestamp, endTimestamp, outputContainer);
+                // UPDATED: Pass pptExpMap to generateDashboard
+                generateDashboard(combinedMap, pptMap, pptExpMap, startTimestamp, endTimestamp, outputContainer);
             } else {
-                generateGroupedReport(reportType, combinedMap, pptMap, startTimestamp, endTimestamp, outputContainer);
+                // UPDATED: Pass pptExpMap to generateGroupedReport
+                generateGroupedReport(reportType, combinedMap, pptMap, pptExpMap, startTimestamp, endTimestamp, outputContainer);
             }
             showMessage(`Laporan ${reportType.toUpperCase()} berjaya dijana.`, 'success', 'report-container');
 
@@ -709,7 +729,7 @@
                     });
                     transaksiMap[key].total_expenditure += amaun;
 
-                    // Aggregate by KOD_PPT for BAKI_AMAUN_PPT
+                    // Aggregate by KOD_PPT for BAKI_AMAUN_PPT (for PPT summary)
                     const kodPptKey = item.kod_ppt;
                     if (kodPptKey) {
                         pptExpMap[kodPptKey] = (pptExpMap[kodPptKey] || { expenditure: 0 });
@@ -811,14 +831,15 @@
             }
         });
 
-        return { combinedMap, pptMap: pptKemaskiniMap };
+        // UPDATED: Return pptExpMap
+        return { combinedMap, pptMap: pptKemaskiniMap, pptExpMap };
     }
 
 
     /**
      * Menjana dan memaparkan laporan berkumpulan.
      */
-    async function generateGroupedReport(reportType, combinedMap, pptMap, startDate, endDate, outputContainer) {
+    async function generateGroupedReport(reportType, combinedMap, pptMap, pptExpMap, startDate, endDate, outputContainer) {
         const groupByLabel = REPORT_GROUPS[reportType];
         
         let groups = {};
@@ -918,7 +939,7 @@
     /**
      * Menjana dan memaparkan Dashboard Ringkasan.
      */
-    function generateDashboard(combinedMap, pptMap, startDate, endDate, outputContainer) {
+    function generateDashboard(combinedMap, pptMap, pptExpMap, startDate, endDate, outputContainer) {
         let totalPeruntukan = 0;
         let totalPerbelanjaan = 0;
         let totalBakiKemaskini = 0;
@@ -932,50 +953,43 @@
         Object.values(combinedMap).forEach(item => {
             totalPeruntukan += item.PERUNTUKAN_KEMASKINI;
             totalPerbelanjaan += item.JUMLAH_PERBELANJAAN;
-
-            const kodPpt = item.KOD_PPT;
-            if (kodPpt && kodPpt !== 'N/A') {
-                if (!pptDetailedSummary[kodPpt]) {
-                    // Initialize for this specific KOD PPT
-                    pptDetailedSummary[kodPpt] = {
-                        kod: kodPpt,
-                        kemaskini: item.AMAUN_PPT_KEMASKINI, // Total KEMASKINI for this PPT (unique sum from PPT records)
-                        expenditure: 0, // Sum of all associated transaction expenditures
-                        baki: 0
-                    };
-                }
-                
-                // Sum up JUMLAH_PERBELANJAAN (which is total expenditure for PTJ_ACTIVITY_SEBAGAI group)
-                // If multiple PTJ_ACTIVITY_SEBAGAI groups map to the same KOD_PPT, we sum their expenditure.
-                // NOTE: This relies on the fact that JUMLAH_PERBELANJAAN in combinedMap is already filtered by time.
-                pptDetailedSummary[kodPpt].expenditure += item.JUMLAH_PERBELANJAAN;
-            }
         });
 
-        // Sum up total PPT Kemaskini and finalize BAKI calculation for detailed summary
+        // Step 1: Initialize/Populate Kemaskini amounts from PPT records (pptMap)
         Object.keys(pptMap).forEach(kodPpt => {
-            const kemaskiniAmaun = pptMap[kodPpt]; // This is AMAUN_PPT_KEMASKINI
+            const kemaskiniAmaun = pptMap[kodPpt]; // Total Kemaskini for this KOD PPT
             totalPPTKemaskini += kemaskiniAmaun;
-            
-            if (!pptDetailedSummary[kodPpt]) {
-                // KOD_PPT exists in PPT records but has no transaction/expenditure associated (will have 0 expenditure)
-                pptDetailedSummary[kodPpt] = {
-                    kod: kodPpt,
-                    kemaskini: kemaskiniAmaun,
-                    expenditure: 0,
-                };
-            } else {
-                // Ensure Kemaskini is set correctly (although it should be the same as initialized)
-                pptDetailedSummary[kodPpt].kemaskini = kemaskiniAmaun;
-            }
 
-            // Calculate final BAKI and contribute to overall PPT Baki Total
-            pptDetailedSummary[kodPpt].baki = pptDetailedSummary[kodPpt].kemaskini - pptDetailedSummary[kodPpt].expenditure;
-            totalPPTBaki += pptDetailedSummary[kodPpt].baki;
+            pptDetailedSummary[kodPpt] = {
+                kod: kodPpt,
+                kemaskini: kemaskiniAmaun,
+                expenditure: 0,
+                baki: 0
+            };
         });
 
-        const pptSummaryArray = Object.values(pptDetailedSummary).sort((a, b) => a.kod.localeCompare(b.kod)); // Sort by KOD PPT
+        // Step 2: Deduct expenditure amounts from Transaksi records (pptExpMap)
+        Object.keys(pptExpMap).forEach(kodPpt => {
+            const expAmaun = pptExpMap[kodPpt].expenditure;
+            totalPPTExpenditure += expAmaun;
 
+            if (pptDetailedSummary[kodPpt]) {
+                pptDetailedSummary[kodPpt].expenditure = expAmaun;
+            }
+            // If the PPT code exists in transactions but not in PPT records, we ignore it for this detailed summary.
+        });
+
+        // Step 3: Calculate BAKI and Overall Total Baki
+        const pptSummaryArray = [];
+        Object.values(pptDetailedSummary).forEach(item => {
+            item.baki = item.kemaskini - item.expenditure;
+            totalPPTBaki += item.baki;
+            pptSummaryArray.push(item);
+        });
+
+        // Sort by KOD PPT
+        pptSummaryArray.sort((a, b) => a.kod.localeCompare(b.kod)); 
+        
         // Baki Kemaskini Keseluruhan
         totalBakiKemaskini = totalPeruntukan - totalPerbelanjaan;
 
@@ -1011,7 +1025,7 @@
                             <tr class="bg-gray-100 font-bold">
                                 <td class="px-3 py-2 text-left">JUMLAH KESELURUHAN</td>
                                 <td class="px-3 py-2 text-right">${totalPPTKemaskini.toFixed(2)}</td>
-                                <td class="px-3 py-2 text-right text-red-700">${(totalPPTKemaskini - totalPPTBaki).toFixed(2)}</td>
+                                <td class="px-3 py-2 text-right text-red-700">${totalPPTExpenditure.toFixed(2)}</td>
                                 <td class="px-3 py-2 text-right ${totalPPTBaki < 0 ? 'text-red-700' : 'text-green-700'}">${totalPPTBaki.toFixed(2)}</td>
                             </tr>
                         </tbody>
